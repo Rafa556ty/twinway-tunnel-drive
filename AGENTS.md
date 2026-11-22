@@ -28,3 +28,10 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+
+- `src/game/` holds the Supercar Highway Dash game ported from its published build; `game.tsx`, `render3d.ts`, `models3d.ts` and siblings are de-minified bundles (`@ts-nocheck`), so make surgical edits there and put new features in typed modules beside them (`highway-layout.ts`, `twin-tunnel.ts`, `scenery.ts`). Why: rewriting the bundles risks breaking gameplay that has no source.
+- Map layout distances (loop length, highway/tunnel/bridge spans, oncoming-carriageway offsets) live in `src/game/highway-layout.ts` with tests in `highway-layout.test.ts`. Why: render code and tests share one source of truth.
+- Game media (GLB models, audio, images) are Lovable Assets pointers in `src/game/assets/`; code references their CDN URLs. Why: keeps 150 MB of binaries out of the repo.
+- `src/styles.css` is the original game's compiled Tailwind output, not a Tailwind source file. Why: the UI was ported as compiled CSS; new utility classes will not be generated unless Tailwind is re-enabled there.
