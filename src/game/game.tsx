@@ -3,6 +3,9 @@
 // Ported from the original Supercar Highway Dash build.
 import * as __React from "react";
 import * as __JSX from "react/jsx-runtime";
+import { PlateEditor as PlateEditorUI } from "./PlateEditor";
+import { applyLicensePlates } from "./license-plates";
+import { loadPlateSettings, plateSettingFor, savePlateSettings } from "./plate-rules";
 const e = (m) => m;
 const t = () => __JSX;
 const n = () => __React;
@@ -1973,6 +1976,9 @@ function dr({
   owned: i,
   onSelect: a,
   busy: o,
+  balance: plateBalance = 0,
+  developer: plateDev = !1,
+  onBalance: onPlateBalance = () => {},
 }) {
   let s = (0, L.useRef)(null),
     [c, l] = (0, L.useState)(0),
@@ -1982,6 +1988,8 @@ function dr({
     [C, oe] = (0, L.useState)(`body`),
     [w, E] = (0, L.useState)(`color`),
     [D, O] = (0, L.useState)(!0),
+    [plates, setPlates] = (0, L.useState)({}),
+    viewRef = (0, L.useRef)(null),
     k = (0, L.useRef)(null),
     se = (0, L.useRef)(S);
   ((se.current = S),
@@ -2010,6 +2018,26 @@ function dr({
       });
     },
     A = S[n][C];
+  ((0, L.useEffect)(() => {
+    setPlates(loadPlateSettings(localStorage));
+  }, []),
+    (0, L.useEffect)(() => {
+      let e = k.current;
+      if (!e || u !== `ready`) return;
+      try {
+        applyLicensePlates(e, n, plateSettingFor(plates, n));
+      } catch (t) {
+        console.warn(`license plates`, t);
+      }
+    }, [plates, n, u]));
+  let setPlate = (e) =>
+    setPlates((t) => {
+      let r = { ...t, [n]: e };
+      try {
+        savePlateSettings(localStorage, r);
+      } catch {}
+      return r;
+    });
   return (
     (0, L.useEffect)(() => {
       (ee(`loading`), l(0));
@@ -2186,6 +2214,21 @@ function dr({
                   }, 2200)));
               };
             (j.addEventListener(`start`, ue), j.addEventListener(`end`, de));
+            let camGoal = null;
+            (j.addEventListener(`start`, () => {
+              camGoal = null;
+            }),
+              (viewRef.current = (e) => {
+                let t = new o.Vector3(0, 0, e === `rear` ? 1 : -1)
+                  .transformDirection(b.matrixWorld)
+                  .setY(0)
+                  .normalize();
+                (t.addScaledVector(new o.Vector3(-t.z, 0, t.x), 0.3),
+                  t.setY(0.2).normalize(),
+                  M && clearTimeout(M),
+                  (j.autoRotate = !1),
+                  (camGoal = j.target.clone().addScaledVector(t, A * 0.62)));
+              }));
             let N = new ResizeObserver(() => {
               let e = Math.max(1, a.clientWidth),
                 t = Math.max(1, a.clientHeight);
@@ -2200,7 +2243,12 @@ function dr({
             });
             N.observe(a);
             let fe = () => {
-              ((t = requestAnimationFrame(fe)), j.update(), p.render(h, g));
+              ((t = requestAnimationFrame(fe)),
+                camGoal &&
+                  (g.position.lerp(camGoal, 0.14),
+                  g.position.distanceTo(camGoal) < 0.005 && (camGoal = null)),
+                j.update(),
+                p.render(h, g));
             };
             (fe(),
               (a.dataset.sceneReady = `true`),
@@ -2209,6 +2257,7 @@ function dr({
               (i = () => {
                 (cancelAnimationFrame(t),
                   (k.current = null),
+                  (viewRef.current = null),
                   N.disconnect(),
                   j.removeEventListener(`start`, ue),
                   j.removeEventListener(`end`, de));
@@ -2347,8 +2396,8 @@ function dr({
                     }),
                     (0, q.jsx)(`div`, {
                       role: `tablist`,
-                      className: `grid grid-cols-2 gap-1`,
-                      children: [`color`, `material`].map((e) =>
+                      className: `grid grid-cols-3 gap-1`,
+                      children: [`color`, `material`, `plate`].map((e) =>
                         (0, q.jsx)(
                           J,
                           {
@@ -2356,14 +2405,23 @@ function dr({
                             "aria-selected": w === e,
                             variant: `outline`,
                             size: `sm`,
-                            onClick: () => E(e),
+                            onClick: () => (
+                              E(e),
+                              e === `plate` && viewRef.current?.(`rear`)
+                            ),
                             className: `h-7 text-[11px] ${w === e ? `border-primary bg-primary/15 text-primary` : `border-hud-border bg-card`}`,
-                            children: e === `color` ? `CORES` : `MATERIAL`,
+                            children:
+                              e === `color`
+                                ? `CORES`
+                                : e === `plate`
+                                  ? `PLACA`
+                                  : `MATERIAL`,
                           },
                           e,
                         ),
                       ),
                     }),
+                    w !== `plate` &&
                     (0, q.jsx)(`div`, {
                       className: `grid grid-cols-2 gap-1`,
                       children: b.map((e) =>
@@ -2386,7 +2444,17 @@ function dr({
                         ),
                       ),
                     }),
-                    w === `color`
+                    w === `plate`
+                      ? (0, q.jsx)(PlateEditorUI, {
+                          carId: n,
+                          setting: plateSettingFor(plates, n),
+                          balance: plateBalance,
+                          developer: plateDev,
+                          onChange: setPlate,
+                          onBalance: onPlateBalance,
+                          onView: (e) => viewRef.current?.(e),
+                        })
+                      : w === `color`
                       ? (0, q.jsxs)(`div`, {
                           children: [
                             (0, q.jsx)(`div`, {
@@ -2440,6 +2508,7 @@ function dr({
                             ),
                           ),
                         }),
+                    w !== `plate` &&
                     (0, q.jsx)(J, {
                       variant: `ghost`,
                       size: `sm`,
@@ -8685,6 +8754,11 @@ function Qi() {
             selectedCar: v.selectedCar,
             owned: j.owned,
             busy: ie,
+            balance: E,
+            developer: O,
+            onBalance: (e) => {
+              (s(localStorage, e), D(e), jr.purchase());
+            },
             onSelect: (e) => {
               me(e);
             },

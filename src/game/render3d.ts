@@ -50,6 +50,8 @@ import {
 } from "three";
 import { l as ue } from "./car-custom";
 import { applyCarCustom as de } from "./car-paint";
+import { applyLicensePlates as plateApply } from "./license-plates";
+import { loadPlateSettings as plateLoad, plateSettingFor as plateFor } from "./plate-rules";
 import {
   fetchGlb as fe,
   i as pe,
@@ -1601,6 +1603,16 @@ var $ = { x: 0.275, y: 0.68, z: 2.37 },
           de(this.player, this.playerKey, ue(localStorage)[this.playerKey]);
         } catch (e) {
           console.warn(`car custom`, e);
+        }
+      if (this.player)
+        try {
+          plateApply(
+            this.player,
+            this.playerKey,
+            plateFor(plateLoad(localStorage), this.playerKey),
+          );
+        } catch (e) {
+          console.warn(`license plates`, e);
         }
     }
     setupChiron(e) {
