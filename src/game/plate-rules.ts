@@ -196,7 +196,15 @@ export function buyPlateStyle(
 export interface PlateMount {
   rear: number;
   front: number | null;
+  /** Sideways offset of the front plate (negative = driver's left). */
+  frontX?: number;
 }
+
+/**
+ * Bugattis in the US carry the front plate offset to the car's left, beside
+ * the horseshoe grille (which fills the centre of the bumper).
+ */
+export const BUGATTI_FRONT_X = -0.5;
 
 export const PLATE_MOUNTS: Record<string, PlateMount> = {
   "mustang-rtr": { rear: 0.78, front: 0.3 },
@@ -204,10 +212,10 @@ export const PLATE_MOUNTS: Record<string, PlateMount> = {
   svj: { rear: 0.45, front: 0.24 },
   "huracan-evo": { rear: 0.5, front: 0.25 },
   laferrari: { rear: 0.45, front: 0.22 },
-  chiron: { rear: 0.43, front: 0.24 },
-  "chiron-ss300": { rear: 0.43, front: 0.24 },
-  tourbillon: { rear: 0.43, front: 0.24 },
-  "voiture-noire": { rear: 0.42, front: 0.24 },
+  chiron: { rear: 0.43, front: 0.26, frontX: BUGATTI_FRONT_X },
+  "chiron-ss300": { rear: 0.43, front: 0.26, frontX: BUGATTI_FRONT_X },
+  tourbillon: { rear: 0.43, front: 0.26, frontX: BUGATTI_FRONT_X },
+  "voiture-noire": { rear: 0.42, front: 0.26, frontX: BUGATTI_FRONT_X },
   jesko: { rear: 0.42, front: 0.24 },
   "utopia-roadster": { rear: 0.4, front: 0.24 },
   huayra: { rear: 0.4, front: 0.24 },

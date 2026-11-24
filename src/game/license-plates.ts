@@ -157,6 +157,8 @@ function makePlateMesh(style: PlateStyle, text: string) {
 interface MountPoint {
   depth: number; // outward distance along the car axis
   pitch: number;
+  yaw: number;
+  x: number;
   y: number;
 }
 
@@ -179,7 +181,7 @@ function solidMeshes(car: Object3D): Mesh[] {
 }
 
 /** Casts a small grid of rays at the bumper to find where the plate rests. */
-function findMount(car: Object3D, side: "rear" | "front", y: number): MountPoint {
+function findMount(car: Object3D, side: "rear" | "front", y: number, x = 0): MountPoint {
   car.updateMatrixWorld(true);
   const toLocal = new Matrix4().copy(car.matrixWorld).invert();
   const box = new Box3();
@@ -201,7 +203,7 @@ function findMount(car: Object3D, side: "rear" | "front", y: number): MountPoint
   for (const oy of [dy, 0, -dy]) {
     const row: number[] = [];
     for (const ox of [-0.11, -0.04, 0.04, 0.11]) {
-      const origin = car.localToWorld(new Vector3(ox, y + oy, start));
+      const origin = car.localToWorld(new Vector3(x + ox, y + oy, start));
       ray.set(origin, dirWorld);
       const hit = ray.intersectObjects(meshes, false)[0];
       if (hit) row.push(sign * car.worldToLocal(hit.point.clone()).z);
@@ -210,28 +212,59 @@ function findMount(car: Object3D, side: "rear" | "front", y: number): MountPoint
   }
   const fallback = side === "rear" ? box.max.z : -box.min.z;
   const all = rows.flat();
-  if (!all.length) return { depth: fallback, pitch: 0, y };
+  if (!all.length) return { depth: fallback, pitch: 0, yaw: 0, x, y };
   const median = (a: number[]) => {
     const s = [...a].sort((p, q) => p - q);
     return s[Math.floor(s.length / 2)]!;
   };
   const m = median(all);
   const near = all.filter((d) => Math.abs(d - m) < 0.06);
-  const depth = Math.max(...near);
+  // Yaw from the left/right edges so an off-centre plate follows the bumper curve.
+  const edge = (ox: number) => {
+    ray.set(car.localToWorld(new Vector3(x + ox, y, start)), dirWorld);
+    const hit = ray.intersectObjects(meshes, false)[0];
+    return hit ? sign * car.worldToLocal(hit.point.clone()).z : null;
+  };
+  const dL = edge(-0.13);
+  const dR = edge(0.13);
+  let yaw = 0;
+  let depth = Math.max(...near);
+  if (dL !== null && dR !== null && Math.abs(dL - dR) < 0.15) {
+    yaw = Math.max(-0.5, Math.min(0.5, Math.atan2(dL - dR, 0.26)));
+    if (Math.abs(yaw) > 0.05) depth = Math.max(dL, dR, m) - Math.abs(dL - dR) / 2 + 0.006;
+  }
   const top = rows[0]!.length ? median(rows[0]!) : m;
   const bottom = rows[2]!.length ? median(rows[2]!) : m;
   const pitch = Math.max(-0.45, Math.min(0.45, Math.atan2(top - bottom, dy * 2)));
-  return { depth, pitch, y };
+  return { depth, pitch, yaw, x, y };
 }
 
-/** Hides plates that ship with some models so only ours shows. */
-function hideModelPlates(car: Object3D) {
+const MODEL_PLATE = /LicensePlate|ManufacturerPlate|^Plate$/i;
+
+/**
+ * Hides plates that ship with some models so only ours shows, and returns
+ * the centre of the model's own rear plate (car-local) when it has one.
+ */
+function hideModelPlates(car: Object3D): Vector3 | null {
+  car.updateMatrixWorld(true);
+  const toLocal = new Matrix4().copy(car.matrixWorld).invert();
+  let rear: Vector3 | null = null;
   car.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh || m.userData["licensePlate"]) return;
     const mats = Array.isArray(m.material) ? m.material : [m.material];
-    if (mats.some((x) => x && /LicensePlate|^Plate$/i.test(x.name))) m.visible = false;
+    const named = MODEL_PLATE.test(m.name) || MODEL_PLATE.test(m.parent?.name ?? "");
+    if (!named && !mats.some((x) => x && MODEL_PLATE.test(x.name))) return;
+    m.visible = false;
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const b = m.geometry.boundingBox!.clone().applyMatrix4(
+      new Matrix4().multiplyMatrices(toLocal, m.matrixWorld),
+    );
+    const c = b.getCenter(new Vector3());
+    const w = b.max.x - b.min.x;
+    if (c.z > 0 && w > 0.2 && w < 0.6 && (!rear || c.z > rear.z)) rear = c;
   });
+  return rear;
 }
 
 function removePlates(car: Object3D) {
@@ -244,6 +277,9 @@ function removePlates(car: Object3D) {
 /** Puts (or refreshes) the rear and optional front plate on a car. */
 export function applyLicensePlates(car: Object3D, carId: string, setting: PlateSetting) {
   removePlates(car);
+  const modelRear = (car.userData["modelRearPlate"] ??= hideModelPlates(car) ?? false) as
+    | Vector3
+    | false;
   hideModelPlates(car);
   const mount = plateMountFor(carId);
   const cache = (car.userData["plateMounts"] ??= {}) as Record<string, MountPoint>;
@@ -253,14 +289,16 @@ export function applyLicensePlates(car: Object3D, carId: string, setting: PlateS
   const sides: ("rear" | "front")[] = ["rear"];
   if (setting.front && mount.front !== null) sides.push("front");
   for (const side of sides) {
-    const y = side === "rear" ? mount.rear : (mount.front as number);
-    const key = `${side}:${y}`;
-    const point = (cache[key] ??= findMount(car, side, y));
+    // Sit on the model's own plate recess when it has one at the rear.
+    const y = side === "rear" ? (modelRear ? modelRear.y : mount.rear) : (mount.front as number);
+    const x = side === "rear" ? (modelRear ? modelRear.x : 0) : (mount.frontX ?? 0);
+    const key = `${side}:${x}:${y}`;
+    const point = (cache[key] ??= findMount(car, side, y, x));
     const plate = makePlateMesh(style, setting.text);
     plate.traverse((o) => (o.userData["licensePlate"] = true));
     plate.rotation.order = "YXZ";
-    plate.rotation.set(point.pitch, side === "rear" ? 0 : Math.PI, 0);
-    plate.position.set(0, point.y, (side === "rear" ? 1 : -1) * point.depth);
+    plate.rotation.set(point.pitch, (side === "rear" ? 0 : Math.PI) + point.yaw, 0);
+    plate.position.set(point.x, point.y, (side === "rear" ? 1 : -1) * point.depth);
     group.add(plate);
   }
   car.add(group);

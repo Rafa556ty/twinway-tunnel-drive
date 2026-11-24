@@ -94,6 +94,7 @@ import {
 import { n as Ve, t as He } from "./quality";
 import { buildTwinTunnel, sweep as tunnelSweep } from "./twin-tunnel";
 import { createCity, createTrees } from "./scenery";
+import { paintGrass } from "./grass-texture";
 import {
   BRIDGE_END,
   BRIDGE_START,
@@ -1470,18 +1471,7 @@ function fn(e) {
   });
 }
 function pn() {
-  return Q(512, 512, (e) => {
-    ((e.fillStyle = `#3f5f2a`),
-      e.fillRect(0, 0, 512, 512),
-      dn(
-        e,
-        512,
-        512,
-        3e4,
-        [`#4c6f32`, `#36521f`, `#5a7e3a`, `#2f4a1b`, `#6a7f3c`],
-        [1, 4],
-      ));
-  });
+  return Q(1024, 1024, (e) => paintGrass(e, 1024));
 }
 function mn() {
   return Q(256, 256, (e) => {
@@ -1943,7 +1933,9 @@ var $ = { x: 0.275, y: 0.68, z: 2.37 },
         }),
         r = new w({
           map: this.grassTex,
-          roughness: 1,
+          bumpMap: this.grassTex,
+          bumpScale: 0.03,
+          roughness: 0.95,
           clippingPlanes: this.waterClip,
           clipIntersection: !0,
         }),

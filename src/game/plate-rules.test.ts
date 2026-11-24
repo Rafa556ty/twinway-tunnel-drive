@@ -43,3 +43,14 @@ describe("license plate rules", () => {
     expect(loadOwnedPlateStyles(store)).toEqual(["california", "black"]);
   });
 });
+
+describe("bugatti front plate", () => {
+  it("sits on the driver's left of the bumper for every Bugatti", async () => {
+    const { plateMountFor, BUGATTI_FRONT_X } = await import("./plate-rules");
+    for (const id of ["chiron", "chiron-ss300", "tourbillon", "voiture-noire"]) {
+      expect(plateMountFor(id).frontX).toBe(BUGATTI_FRONT_X);
+    }
+    expect(BUGATTI_FRONT_X).toBeLessThan(0);
+    expect(plateMountFor("mustang-rtr").frontX).toBeUndefined();
+  });
+});
